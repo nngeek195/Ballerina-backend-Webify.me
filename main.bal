@@ -4,7 +4,7 @@ import ballerina/log;
 import ballerina/time;
 import ballerinax/mongodb;
 
-// configurable string unsplashAccessKey = "NxAg7G1FeWkcwqrcYNrk6pnoKtnfEbDtK-Mm7FrxLfc";
+final http:Client loremPicsumClient = check new ("https://picsum.photos");
 // MongoDB configuration
 configurable string host = "localhost";
 configurable int port = 27017;
@@ -41,19 +41,6 @@ type ProfilePictureUpdate record {
     string? unsplashImageId;
 };
 
-// Unsplash API response type
-type UnsplashImage record {
-    string id;
-    record {
-        string small;
-        string regular;
-        string full;
-    } urls;
-    record {
-        string name;
-    } user;
-};
-
 // User input type
 type UserInput record {
     string email;
@@ -72,6 +59,17 @@ type ApiResponse record {
     boolean success;
     string message;
     json? data = ();
+};
+
+// UserData record type for MongoDB
+type UserDataDocument record {
+    string email;
+    string username;
+    string picture; // Store the profile picture URL
+    string? bio = (); // Optional field for user bio
+    string? location = (); // Optional field for user location
+    string? phoneNumber = (); // Optional field for user phone number
+    // Add more fields as needed
 };
 
 // CORS configuration
@@ -97,18 +95,55 @@ service / on new http:Listener(9090) {
     }
 
     // Regular signup endpoint - Modified to assign random profile picture
+    // Regular signup endpoint - Modified to assign random profile picture
     resource function post signup(@http:Payload UserInput user) returns ApiResponse|error {
         log:printInfo("=== REGULAR SIGNUP REQUEST ===");
         log:printInfo("Email: " + user.email);
         log:printInfo("Username: " + user.username);
 
-        // ... existing validation code ...
+        // ADD THESE VALIDATION CHECKS
+        // Validate input
+        if user.email.length() == 0 || user.username.length() == 0 || user.password.length() == 0 {
+            log:printWarn("Signup validation failed: Empty fields");
+            return {
+                success: false,
+                message: "All fields are required"
+            };
+        }
+
+        // Password strength validation
+        if user.password.length() < 6 {
+            return {
+                success: false,
+                message: "Password must be at least 6 characters long"
+            };
+        }
 
         // Get database and collection
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
-        // ... existing email and username checks ...
+        // ADD THESE EMAIL AND USERNAME CHECKS
+        // Check for existing email
+        int emailCount = check usersCollection->countDocuments({"email": user.email});
+        if emailCount > 0 {
+            log:printWarn("Signup failed: Email already exists - " + user.email);
+            return {
+                success: false,
+                message: "Email already exists"
+            };
+        }
+
+        // Check for existing username
+        int usernameCount = check usersCollection->countDocuments({"username": user.username});
+        if usernameCount > 0 {
+            log:printWarn("Signup failed: Username already exists - " + user.username);
+            return {
+                success: false,
+                message: "Username already exists"
+            };
+        }
 
         // Hash password
         byte[] hashedPassword = crypto:hashSha256(user.password.toBytes());
@@ -130,12 +165,12 @@ service / on new http:Listener(9090) {
             "lastLogin": (),
             "authMethod": "local",
             "googleId": (),
-            "picture": profilePictureUrl,  // Store the profile picture URL
-            "pictureId": randomSeed.toString(),  // Store the picture ID for reference
+            "picture": profilePictureUrl,
+            "pictureId": randomSeed.toString(),
             "emailVerified": false
         };
 
-        // Insert user into database
+        // Insert user into users collection
         mongodb:Error? insertResult = usersCollection->insertOne(newUserDoc);
 
         if insertResult is mongodb:Error {
@@ -146,7 +181,36 @@ service / on new http:Listener(9090) {
             };
         }
 
+        // Create new userData document
+        map<json> newUserDataDoc = {
+            "email": user.email,
+            "username": user.username,
+            "picture": profilePictureUrl,
+            "bio": (),
+            "location": (),
+            "phoneNumber": ()
+        };
+
+        // Insert userData into userData collection
+        mongodb:Error? userDataInsertResult = userDataCollection->insertOne(newUserDataDoc);
+
+        if userDataInsertResult is mongodb:Error {
+            log:printError("Failed to insert user data", 'error = userDataInsertResult);
+
+            // ADD ROLLBACK: Delete user from users collection if userData fails
+            mongodb:DeleteResult|mongodb:Error rollbackResult = usersCollection->deleteOne({"email": user.email});
+            if rollbackResult is mongodb:Error {
+                log:printError("Failed to rollback user creation", 'error = rollbackResult);
+            }
+
+            return {
+                success: false,
+                message: "Failed to create user data: " + userDataInsertResult.message()
+            };
+        }
+
         log:printInfo("✅ User registered successfully: " + user.username);
+        log:printInfo("✅ User profile created in userData collection");
 
         return {
             success: true,
@@ -161,6 +225,7 @@ service / on new http:Listener(9090) {
     }
 
     // Login endpoint - UPDATED to return user data
+    // Login endpoint - UPDATED to return user data from userData collection
     resource function post login(@http:Payload LoginRequest credentials) returns ApiResponse|error {
         log:printInfo("=== LOGIN REQUEST ===");
         log:printInfo("Email: " + credentials.email);
@@ -176,6 +241,7 @@ service / on new http:Listener(9090) {
 
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData"); // ADD THIS
 
         // Find user by email
         map<json> filter = {"email": credentials.email};
@@ -215,14 +281,31 @@ service / on new http:Listener(9090) {
                 log:printWarn("Failed to update last login time: " + updateResult.message());
             }
 
-            // Return success with user data
+            // ADD THIS: Get user profile data from userData collection
+            stream<UserDataDocument, mongodb:Error?> userDataStream = check userDataCollection->find(filter, findOptions);
+            UserDataDocument[] userDataList = check from UserDataDocument doc in userDataStream
+                select doc;
+
+            json profileData = {};
+            if userDataList.length() > 0 {
+                UserDataDocument userDataDoc = userDataList[0];
+                profileData = {
+                    picture: userDataDoc.picture,
+                    bio: userDataDoc?.bio,
+                    location: userDataDoc?.location,
+                    phoneNumber: userDataDoc?.phoneNumber
+                };
+            }
+
+            // Return success with user data including profile
             return {
                 success: true,
                 message: "Login successful",
                 data: {
                     email: user.email,
                     username: user.username,
-                    loginTime: currentTime
+                    loginTime: currentTime,
+                    profile: profileData // ADD PROFILE DATA
                 }
             };
         } else {
@@ -341,36 +424,48 @@ service / on new http:Listener(9090) {
 
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData"); // New collection
 
         // Check if user exists
         int userCount = check usersCollection->countDocuments({"email": updateData.email});
         if userCount == 0 {
             return {
                 success: false,
-                message: "User not found"
+                message: "User  not found"
             };
         }
 
-        // Prepare update document
+        // Prepare update document for users collection
         map<json> updateFields = {
-            "picture": updateData.pictureUrl,
-            "unsplashImageId": updateData.unsplashImageId
+            "picture": updateData.pictureUrl
         };
 
         mongodb:Update updateDoc = {
             set: updateFields
         };
 
-        mongodb:UpdateResult|mongodb:Error updateResult = usersCollection->updateOne(
-            {"email": updateData.email},
-            updateDoc
-        );
+        // Update user document in users collection
+        mongodb:UpdateResult|mongodb:Error updateResult = usersCollection->updateOne({"email": updateData.email}, updateDoc);
 
         if updateResult is mongodb:Error {
-            log:printError("Failed to update profile picture", 'error = updateResult);
+            log:printError("Failed to update profile picture in users collection", 'error = updateResult);
             return {
                 success: false,
                 message: "Failed to update profile picture"
+            };
+        }
+
+        // Update userData document in userData collection
+        mongodb:UpdateResult|mongodb:Error userDataUpdateResult = userDataCollection->updateOne(
+        {"email": updateData.email},
+        {set: {"picture": updateData.pictureUrl}}
+        );
+
+        if userDataUpdateResult is mongodb:Error {
+            log:printError("Failed to update profile picture in userData collection", 'error = userDataUpdateResult);
+            return {
+                success: false,
+                message: "Failed to update profile picture in user data"
             };
         }
 
@@ -378,11 +473,7 @@ service / on new http:Listener(9090) {
 
         return {
             success: true,
-            message: "Profile picture updated successfully",
-            data: {
-                pictureUrl: updateData.pictureUrl,
-                unsplashImageId: updateData.unsplashImageId
-            }
+            message: "Profile picture updated successfully"
         };
     }
 
@@ -414,4 +505,182 @@ service / on new http:Listener(9090) {
             data: images
         };
     }
+
+    // Get user profile data from userData collection
+    resource function get userProfile/[string email]() returns ApiResponse|error {
+        log:printInfo("=== GET USER PROFILE REQUEST ===");
+        log:printInfo("Email: " + email);
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
+
+        // Find user profile by email
+        map<json> filter = {"email": email};
+        mongodb:FindOptions findOptions = {};
+        stream<UserDataDocument, mongodb:Error?> userDataStream = check userDataCollection->find(filter, findOptions);
+
+        UserDataDocument[] userDataList = check from UserDataDocument doc in userDataStream
+            select doc;
+
+        if userDataList.length() == 0 {
+            log:printWarn("User profile not found: " + email);
+            return {
+                success: false,
+                message: "User profile not found"
+            };
+        }
+
+        UserDataDocument userDataDoc = userDataList[0];
+
+        return {
+            success: true,
+            message: "User profile retrieved successfully",
+            data: {
+                email: userDataDoc.email,
+                username: userDataDoc.username,
+                picture: userDataDoc.picture,
+                bio: userDataDoc?.bio,
+                location: userDataDoc?.location,
+                phoneNumber: userDataDoc?.phoneNumber
+            }
+        };
+    }
+
+    // Update user profile data (bio, location, etc.)
+    resource function put updateUserProfile(@http:Payload json profileData) returns ApiResponse|error {
+        log:printInfo("=== UPDATE USER PROFILE REQUEST ===");
+
+        // Extract email from profile data
+        json|error emailValue = profileData.email;
+        if !(emailValue is string) {
+            return {
+                success: false,
+                message: "Email is required"
+            };
+        }
+
+        string email = emailValue;
+        log:printInfo("Email: " + email);
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
+
+        // Check if user exists in userData collection
+        int userCount = check userDataCollection->countDocuments({"email": email});
+        if userCount == 0 {
+            return {
+                success: false,
+                message: "User profile not found"
+            };
+        }
+
+        // Prepare update document
+        map<json> updateFields = {};
+
+        mongodb:Update updateDoc = {
+            set: updateFields
+        };
+
+        // Update userData document
+        mongodb:UpdateResult|mongodb:Error updateResult = userDataCollection->updateOne(
+        {"email": email},
+        updateDoc
+        );
+
+        if updateResult is mongodb:Error {
+            log:printError("Failed to update user profile", 'error = updateResult);
+            return {
+                success: false,
+                message: "Failed to update user profile"
+            };
+        }
+
+        log:printInfo("✅ User profile updated successfully for: " + email);
+
+        return {
+            success: true,
+            message: "User profile updated successfully"
+        };
+    }
+
+    // Get all userData (for testing - remove in production)
+    resource function get allUserData() returns ApiResponse|error {
+        log:printInfo("Fetching all user data");
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
+
+        map<json> filter = {};
+        mongodb:FindOptions findOptions = {};
+        stream<UserDataDocument, mongodb:Error?> userDataStream = check userDataCollection->find(filter, findOptions);
+
+        json[] userData = check from UserDataDocument userDoc in userDataStream
+            select {
+                email: userDoc.email,
+                username: userDoc.username,
+                picture: userDoc.picture,
+                bio: userDoc?.bio,
+                location: userDoc?.location,
+                phoneNumber: userDoc?.phoneNumber
+            };
+
+        log:printInfo("Found " + userData.length().toString() + " user profiles");
+
+        return {
+            success: true,
+            message: "User data retrieved successfully",
+            data: userData
+        };
+    }
+
+    // Delete user profile from userData collection
+    resource function delete userProfile/[string email]() returns ApiResponse|error {
+        log:printInfo("Delete user profile request for: " + email);
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
+
+        map<json> filter = {"email": email};
+        mongodb:DeleteResult|mongodb:Error deleteResult = userDataCollection->deleteOne(filter);
+
+        if deleteResult is mongodb:Error {
+            log:printError("Failed to delete user profile", 'error = deleteResult);
+            return {
+                success: false,
+                message: "Failed to delete user profile"
+            };
+        }
+
+        if deleteResult.deletedCount > 0 {
+            log:printInfo("✅ User profile deleted successfully: " + email);
+            return {
+                success: true,
+                message: "User profile deleted successfully"
+            };
+        } else {
+            log:printWarn("User profile not found for deletion: " + email);
+            return {
+                success: false,
+                message: "User profile not found"
+            };
+        }
+    }
+
+    // Check if user profile exists in userData collection
+    resource function get checkUserProfile/[string email]() returns ApiResponse|error {
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
+
+        int count = check userDataCollection->countDocuments({"email": email});
+
+        return {
+            success: true,
+            message: count > 0 ? "User profile exists" : "User profile not found",
+            data: {
+                exists: count > 0,
+                email: email
+            }
+        };
+    }
+
 }
