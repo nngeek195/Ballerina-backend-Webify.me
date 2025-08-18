@@ -62,6 +62,10 @@ configurable string emailPassword = "your-app-password";
 configurable string fromEmail = "your-email@gmail.com";
 configurable string fromName = "Your App Name";
 
+// Admin credentials (in production, store these securely)
+configurable string adminUsername = "admin";
+configurable string adminPassword = "admin";
+
 // Email client
 email:SmtpConfiguration smtpConfig = {
     port: smtpPort,
@@ -162,6 +166,17 @@ type ApiResponse record {
     boolean success;
     string message;
     json? data = ();
+};
+
+// Presentation record types
+type PresentationDocument record {
+    string userEmail;
+    string topic;
+    string[] subtopics;
+    json slides;
+    string createdAt;
+    string? thumbnail = ();
+    boolean isActive;
 };
 
 final email:SmtpClient smtpClient = check new (smtpHost, emailUsername, emailPassword, smtpConfig);
@@ -372,6 +387,100 @@ function sendWelcomeEmail(string toEmail, string username, string profilePicture
     }
 }
 
+// Email template for notifications
+function sendNotificationEmail(string toEmail, string username, string title, string message, string messageType) returns error? {
+    log:printInfo("📧 Sending notification email to: " + toEmail);
+
+    // Get emoji based on message type
+    string typeEmoji = getMessageTypeEmoji(messageType);
+
+    string emailHtml = string `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .container { background: white; border-radius: 10px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            .header { text-align: center; margin-bottom: 30px; color: #667eea; }
+            .message-type { padding: 10px 20px; border-radius: 5px; margin: 20px 0; text-align: center; }
+            .type-info { background: #e3f2fd; color: #1976d2; }
+            .type-success { background: #e8f5e9; color: #388e3c; }
+            .type-warning { background: #fff3e0; color: #f57c00; }
+            .type-error { background: #ffebee; color: #d32f2f; }
+            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>${title}</h1>
+            </div>
+            
+            <p>Hi <strong>${username}</strong>,</p>
+            
+            <div class="message-type type-${messageType}">
+                <h3>${title}</h3>
+                <p>${message}</p>
+            </div>
+            
+            <p>This is an important notification from ${fromName}. Please log in to your account for more details.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="http://localhost:3000/login" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Login to Your Account →
+                </a>
+            </div>
+            
+            <div class="footer">
+                <p>Thank you,<br>${fromName} Team</p>
+                <p style="font-size: 12px; color: #999;">
+                    This email was sent to ${toEmail}. 
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    email:Message emailMessage = {
+            to: [toEmail],
+            subject: typeEmoji + " " + title + " - " + fromName,
+            body: emailHtml,
+            'from: fromEmail,
+            contentType: mime:TEXT_HTML
+        };
+
+    email:Error? result = smtpClient->sendMessage(emailMessage);
+
+    if result is email:Error {
+        log:printError("❌ Failed to send notification email to " + toEmail, 'error = result);
+        return result;
+    } else {
+        log:printInfo("✅ Notification email sent successfully to: " + toEmail);
+    }
+}
+
+// Helper function to get emoji for message type
+function getMessageTypeEmoji(string messageType) returns string {
+    match messageType {
+        "success" => {
+            return "✅";
+        }
+        "warning" => {
+            return "⚠️";
+        }
+        "error" => {
+            return "❌";
+        }
+        "info" => {
+            return "ℹ️";
+        }
+        _ => {
+            return "📢";
+        }
+    }
+}
+
 final http:Client loremPicsumClient = check new ("https://picsum.photos");
 // MongoDB configuration
 configurable string host = "localhost";
@@ -387,6 +496,20 @@ final mongodb:Client mongoClient = check new ({
         }
     }
 });
+
+// Extract token from Authorization header
+function extractTokenFromHeader(string|http:HeaderNotFoundError authHeaderResult) returns string|error {
+    if authHeaderResult is http:HeaderNotFoundError {
+        return error("Authorization header is missing");
+    }
+
+    string authHeader = authHeaderResult;
+    if !authHeader.startsWith("Bearer ") {
+        return error("Invalid authorization header format");
+    }
+
+    return authHeader.substring(7); // Remove "Bearer " prefix
+}
 
 // CORS configuration
 @http:ServiceConfig {
@@ -524,7 +647,7 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Login endpoint - UPDATED to return user data from userData collection
+    // Remove all JWT-related functions and just keep the simple login endpoint
     resource function post login(@http:Payload LoginRequest credentials) returns ApiResponse|error {
         log:printInfo("=== LOGIN REQUEST ===");
         log:printInfo("Email: " + credentials.email);
@@ -540,7 +663,7 @@ service / on new http:Listener(9090) {
 
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
-        mongodb:Collection userDataCollection = check userDb->getCollection("userData"); // ADD THIS
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
         // Find user by email
         map<json> filter = {"email": credentials.email};
@@ -580,7 +703,7 @@ service / on new http:Listener(9090) {
                 log:printWarn("Failed to update last login time: " + updateResult.message());
             }
 
-            // ADD THIS: Get user profile data from userData collection
+            // Get user profile data from userData collection
             stream<UserDataDocument, mongodb:Error?> userDataStream = check userDataCollection->find(filter, findOptions);
             UserDataDocument[] userDataList = check from UserDataDocument doc in userDataStream
                 select doc;
@@ -596,7 +719,7 @@ service / on new http:Listener(9090) {
                 };
             }
 
-            // Return success with user data including profile
+            // Return success with user data (no JWT token needed)
             return {
                 success: true,
                 message: "Login successful",
@@ -604,7 +727,7 @@ service / on new http:Listener(9090) {
                     email: user.email,
                     username: user.username,
                     loginTime: currentTime,
-                    profile: profileData // ADD PROFILE DATA
+                    profile: profileData
                 }
             };
         } else {
@@ -655,6 +778,234 @@ service / on new http:Listener(9090) {
             message: "Message sent to all users successfully!",
             data: {
                 messageId: messageId
+            }
+        };
+    }
+
+    // Store presentation
+    resource function post storePresentation(@http:Payload json requestData) returns ApiResponse|error {
+        log:printInfo("=== STORE PRESENTATION ===");
+
+        json|error userEmailValue = requestData.userEmail;
+        json|error presentationValue = requestData.presentation;
+
+        if !(userEmailValue is string) || !(presentationValue is json) {
+            return {
+                success: false,
+                message: "Invalid request data"
+            };
+        }
+
+        string userEmail = userEmailValue;
+        json presentation = presentationValue;
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection presentationsCollection = check userDb->getCollection("presentations");
+
+        string currentTime = time:utcToString(time:utcNow());
+
+        map<json> presentationDoc = {
+            "userEmail": userEmail,
+            "topic": check presentation.topic,
+            "subtopics": check presentation.subtopics,
+            "slides": check presentation.slides,
+            "createdAt": currentTime,
+            "isActive": true
+        };
+
+        mongodb:Error? insertResult = presentationsCollection->insertOne(presentationDoc);
+
+        if insertResult is mongodb:Error {
+            log:printError("Failed to store presentation", 'error = insertResult);
+            return {
+                success: false,
+                message: "Failed to store presentation"
+            };
+        }
+
+        log:printInfo("✅ Presentation stored successfully");
+
+        return {
+            success: true,
+            message: "Presentation stored successfully",
+            data: {
+                id: presentationDoc["_id"]
+            }
+        };
+    }
+
+    // Get user presentations
+    resource function get getUserPresentations/[string userEmail]() returns ApiResponse|error {
+        log:printInfo("=== GET USER PRESENTATIONS ===");
+        log:printInfo("User: " + userEmail);
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection presentationsCollection = check userDb->getCollection("presentations");
+
+        map<json> filter = {"userEmail": userEmail, "isActive": true};
+        mongodb:FindOptions findOptions = {
+            sort: {createdAt: -1}
+        };
+
+        stream<map<json>, mongodb:Error?> presentationStream = check presentationsCollection->find(filter, findOptions);
+
+        json[] presentations = [];
+        error? e = presentationStream.forEach(function(map<json> doc) {
+            presentations.push({
+                "_id": doc["_id"],
+                "topic": doc["topic"],
+                "subtopics": doc["subtopics"],
+                "createdAt": doc["createdAt"],
+                "thumbnail": doc["thumbnail"]
+            });
+        });
+
+        if e is error {
+            log:printError("Error processing presentation stream", 'error = e);
+            return {
+                success: false,
+                message: "Failed to process presentations"
+            };
+        }
+
+        log:printInfo("Found " + presentations.length().toString() + " presentations");
+
+        return {
+            success: true,
+            message: "Presentations retrieved successfully",
+            data: presentations
+        };
+    }
+
+    // Delete presentation
+    resource function delete deletePresentation/[string presentationId](@http:Payload json requestData) returns ApiResponse|error {
+        log:printInfo("=== DELETE PRESENTATION ===");
+        log:printInfo("Presentation ID: " + presentationId);
+
+        json|error userEmailValue = requestData.userEmail;
+        if !(userEmailValue is string) {
+            return {
+                success: false,
+                message: "Invalid request data"
+            };
+        }
+
+        string userEmail = userEmailValue;
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection presentationsCollection = check userDb->getCollection("presentations");
+
+        map<json> filter = {"_id": presentationId, "userEmail": userEmail};
+        mongodb:Update updateDoc = {
+            set: {"isActive": false}
+        };
+
+        mongodb:UpdateResult|mongodb:Error updateResult = presentationsCollection->updateOne(filter, updateDoc);
+
+        if updateResult is mongodb:Error {
+            log:printError("Failed to delete presentation", 'error = updateResult);
+            return {
+                success: false,
+                message: "Failed to delete presentation"
+            };
+        }
+
+        log:printInfo("✅ Presentation deleted successfully");
+
+        return {
+            success: true,
+            message: "Presentation deleted successfully"
+        };
+    }
+
+    // Rename presentation
+    resource function put renamePresentation/[string presentationId](@http:Payload json requestData) returns ApiResponse|error {
+        log:printInfo("=== RENAME PRESENTATION ===");
+        log:printInfo("Presentation ID: " + presentationId);
+
+        json|error userEmailValue = requestData.userEmail;
+        json|error newTitleValue = requestData.newTitle;
+
+        if !(userEmailValue is string) || !(newTitleValue is string) {
+            return {
+                success: false,
+                message: "Invalid request data"
+            };
+        }
+
+        string userEmail = userEmailValue;
+        string newTitle = newTitleValue;
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection presentationsCollection = check userDb->getCollection("presentations");
+
+        map<json> filter = {"_id": presentationId, "userEmail": userEmail};
+        mongodb:Update updateDoc = {
+            set: {"topic": newTitle}
+        };
+
+        mongodb:UpdateResult|mongodb:Error updateResult = presentationsCollection->updateOne(filter, updateDoc);
+
+        if updateResult is mongodb:Error {
+            log:printError("Failed to rename presentation", 'error = updateResult);
+            return {
+                success: false,
+                message: "Failed to rename presentation"
+            };
+        }
+
+        log:printInfo("✅ Presentation renamed successfully");
+
+        return {
+            success: true,
+            message: "Presentation renamed successfully"
+        };
+    }
+
+    // Get single presentation
+    resource function get getPresentation/[string presentationId]/[string userEmail]() returns ApiResponse|error {
+        log:printInfo("=== GET SINGLE PRESENTATION ===");
+        log:printInfo("Presentation ID: " + presentationId);
+        log:printInfo("User: " + userEmail);
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection presentationsCollection = check userDb->getCollection("presentations");
+
+        map<json> filter = {"_id": presentationId, "userEmail": userEmail, "isActive": true};
+        mongodb:FindOptions findOptions = {};
+
+        stream<map<json>, mongodb:Error?> presentationStream = check presentationsCollection->find(filter, findOptions);
+
+        map<json>[] presentations = [];
+        error? e = presentationStream.forEach(function(map<json> doc) {
+            presentations.push(doc);
+        });
+
+        if e is error {
+            log:printError("Error processing presentation stream", 'error = e);
+            return {
+                success: false,
+                message: "Failed to process presentation"
+            };
+        }
+
+        if presentations.length() == 0 {
+            return {
+                success: false,
+                message: "Presentation not found"
+            };
+        }
+
+        map<json> presentation = presentations[0];
+
+        return {
+            success: true,
+            message: "Presentation retrieved successfully",
+            data: {
+                topic: presentation["topic"],
+                subtopics: presentation["subtopics"],
+                slides: presentation["slides"],
+                createdAt: presentation["createdAt"]
             }
         };
     }
@@ -872,7 +1223,7 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get random profile picture from Lorem Picsum
+    // Get random profile picture from Lorem Picsum sendemail
     resource function get randomProfilePicture() returns json|error {
         string imageUrl = "https://picsum.photos/200/300"; // Change dimensions as needed
         return {
@@ -1454,101 +1805,5 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Email template for notifications
-    function sendNotificationEmail(string toEmail, string username, string title, string message, string messageType) returns error? {
-        log:printInfo("📧 Sending notification email to: " + toEmail);
-
-        // Get emoji based on message type
-        string typeEmoji = self.getMessageTypeEmoji(messageType);
-
-        string emailHtml = string `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .container { background: white; border-radius: 10px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-            .header { text-align: center; margin-bottom: 30px; color: #667eea; }
-            .message-type { padding: 10px 20px; border-radius: 5px; margin: 20px 0; text-align: center; }
-            .type-info { background: #e3f2fd; color: #1976d2; }
-            .type-success { background: #e8f5e9; color: #388e3c; }
-            .type-warning { background: #fff3e0; color: #f57c00; }
-            .type-error { background: #ffebee; color: #d32f2f; }
-            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>${typeEmoji} ${title}</h1>
-            </div>
-            
-            <p>Hi <strong>${username}</strong>,</p>
-            
-            <div class="message-type type-${messageType}">
-                <h3>${title}</h3>
-                <p>${message}</p>
-            </div>
-            
-            <p>This is an important notification from ${fromName}. Please log in to your account for more details.</p>
-            
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:3000/login" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                    Login to Your Account →
-                </a>
-            </div>
-            
-            <div class="footer">
-                <p>Thank you,<br>${fromName} Team</p>
-                <p style="font-size: 12px; color: #999;">
-                    This email was sent to ${toEmail}. 
-                </p>
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
-
-        email:Message emailMessage = {
-            to: [toEmail],
-            subject: typeEmoji + " " + title + " - " + fromName,
-            body: emailHtml,
-            'from: fromEmail,
-            contentType: mime:TEXT_HTML
-        };
-
-        email:Error? result = smtpClient->sendMessage(emailMessage);
-
-        if result is email:Error {
-            log:printError("❌ Failed to send notification email to " + toEmail, 'error = result);
-            return result;
-        } else {
-            log:printInfo("✅ Notification email sent successfully to: " + toEmail);
-        }
-    }
-
-    // Helper function to get emoji for message type
-    function getMessageTypeEmoji(string messageType) returns string {
-        match messageType {
-            "success" => {
-                return "✅";
-            }
-            "warning" => {
-                return "⚠️";
-            }
-            "error" => {
-                return "❌";
-            }
-            "info" => {
-                return "ℹ️";
-            }
-            _ => {
-                return "📢";
-            }
-        }
-    }
 }
 
-function sendNotificationEmail(string user, string user1, string s, string s1, string s2) returns error? {
-    return ();
-}
