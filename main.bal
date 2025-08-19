@@ -1010,108 +1010,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Simple get messages - avoid complex operations for now
-    // resource function get messages/[string userEmail]() returns ApiResponse|error {
-    //     log:printInfo("=== GET USER MESSAGES REQUEST ===");
-    //     log:printInfo("User: " + userEmail);
-
-    //     // For now, let's create some test data to verify the frontend works
-    //     json[] testMessages = [
-    //         {
-    //             "id": "test-1",
-    //             "title": "Welcome to Our Platform!",
-    //             "message": "Thank you for joining us. We're excited to have you on board!",
-    //             "type": "success",
-    //             "createdAt": time:utcToString(time:utcNow()),
-    //             "priority": 2
-    //         },
-    //         {
-    //             "id": "test-2",
-    //             "title": "System Maintenance",
-    //             "message": "We will be performing scheduled maintenance tonight from 2 AM to 4 AM.",
-    //             "type": "warning",
-    //             "createdAt": time:utcToString(time:utcNow()),
-    //             "priority": 3
-    //         }
-    //     ];
-
-    //     return {
-    //         success: true,
-    //         message: "Messages retrieved successfully",
-    //         data: {
-    //             messages: testMessages,
-    //             count: testMessages.length()
-    //         }
-    //     };
-    // }
-
-    // // Simple mark as read
-    // resource function post messages/markRead(@http:Payload MarkMessageReadRequest readData) returns ApiResponse|error {
-    //     log:printInfo("=== MARK MESSAGE AS READ ===");
-    //     log:printInfo("User: " + readData.userEmail);
-    //     log:printInfo("Message ID: " + readData.messageId);
-
-    //     // For now, just return success
-    //     // We'll implement the actual database logic once we solve the find issue
-
-    //     return {
-    //         success: true,
-    //         message: "Message marked as read"
-    //     };
-    // }
-
-    // // Simple admin messages - return test data for now
-    // resource function get admin/messages() returns ApiResponse|error {
-    //     log:printInfo("=== GET ALL MESSAGES (ADMIN) ===");
-
-    //     // Return test data to verify admin panel works
-    //     json[] testAdminMessages = [
-    //         {
-    //             "messageId": "admin-test-1",
-    //             "title": "Welcome Message",
-    //             "message": "Welcome to our platform!",
-    //             "type": "success",
-    //             "createdAt": time:utcToString(time:utcNow()),
-    //             "createdBy": "admin@test.com",
-    //             "isActive": true,
-    //             "priority": 2,
-    //             "readCount": 5
-    //         },
-    //         {
-    //             "messageId": "admin-test-2",
-    //             "title": "Maintenance Notice",
-    //             "message": "System maintenance scheduled",
-    //             "type": "warning",
-    //             "createdAt": time:utcToString(time:utcNow()),
-    //             "createdBy": "admin@test.com",
-    //             "isActive": true,
-    //             "priority": 3,
-    //             "readCount": 2
-    //         }
-    //     ];
-
-    //     return {
-    //         success: true,
-    //         message: "All messages retrieved",
-    //         data: testAdminMessages
-    //     };
-    // }
-
-    // // Test endpoint that works
-    // resource function get test/messages() returns ApiResponse|error {
-    //     log:printInfo("=== TEST MESSAGES ===");
-
-    //     return {
-    //         success: true,
-    //         message: "Test endpoint working",
-    //         data: {
-    //             totalMessages: 2,
-    //             status: "MongoDB connection OK, using test data for now"
-    //         }
-    //     };
-    // }
-
-    // // Get all users (for testing - remove in production)
     resource function get users() returns ApiResponse|error {
         log:printInfo("Fetching all users");
 
@@ -1683,7 +1581,6 @@ service / on new http:Listener(9090) {
         int successCount = 0;
         int errorCount = 0;
 
-        // Send email to each user
         foreach UserDocument user in allUsers {
             // Send email
             error? emailResult = sendNotificationEmail(user.email, user.username, emailData.title, emailData.message, emailData.messageType);
