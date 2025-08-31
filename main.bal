@@ -7,14 +7,12 @@ import ballerina/time;
 import ballerina/uuid;
 import ballerinax/mongodb;
 
-// Simple notification counter record
 type NotificationCounter record {
     string userEmail;
     int emailCount;
     string lastEmailSent;
 };
 
-// Admin message request for email
 type AdminEmailRequest record {
     string title;
     string message;
@@ -23,22 +21,20 @@ type AdminEmailRequest record {
     string adminEmail;
 };
 
-// Reset notification request
 type ResetNotificationRequest record {
     string userEmail;
 };
 
-// Update the record types
 type AdminMessageDocument record {
     string messageId;
     string title;
     string message;
-    string messageType; // "info", "warning", "success", "error"
+    string messageType;
     string createdAt;
     string createdBy;
     boolean isActive;
-    int priority; // 1=low, 2=medium, 3=high
-    string[] readByUsers; // Change to string array
+    int priority;
+    string[] readByUsers;
 };
 
 type CreateMessageRequest record {
@@ -54,7 +50,6 @@ type MarkMessageReadRequest record {
     string messageId;
 };
 
-// Add email configurations
 configurable string smtpHost = "smtp.gmail.com";
 configurable int smtpPort = 587;
 configurable string emailUsername = "your-email@gmail.com";
@@ -62,11 +57,9 @@ configurable string emailPassword = "your-app-password";
 configurable string fromEmail = "your-email@gmail.com";
 configurable string fromName = "Your App Name";
 
-// Admin credentials (in production, store these securely)
 configurable string adminUsername = "admin";
 configurable string adminPassword = "admin";
 
-// Email client
 email:SmtpConfiguration smtpConfig = {
     port: smtpPort,
     security: email:START_TLS_AUTO
@@ -81,22 +74,21 @@ type SimpleMessage record {
     string createdBy;
     boolean isActive;
     int priority;
-    json readByUsers; // Keep as json for easier handling
+    json readByUsers;
 };
 
-// Notification record types
 type NotificationDocument record {
     string title;
     string message;
-    string notificationType; // "info", "warning", "success", "error"
+    string notificationType;
     string createdAt;
     string createdBy;
     boolean isActive;
-    int priority; // 1=low, 2=medium, 3=high
+    int priority;
 };
 
 type UserNotificationDocument record {
-    string userId; // user email
+    string userId;
     string notificationId;
     string? readAt = ();
     boolean isRead;
@@ -115,19 +107,17 @@ type MarkNotificationReadRequest record {
     string notificationId;
 };
 
-// UserData record type for MongoDB
 type UserDataDocument record {
     string email;
     string username;
-    string picture; // Store the profile picture URL
-    string? pictureId = (); // Store the picture ID for consistency
-    string? bio = (); // Optional field for user bio
-    string? location = (); // Optional field for user location
-    string? phoneNumber = (); // Optional field for user phone number
+    string picture;
+    string? pictureId = ();
+    string? bio = ();
+    string? location = ();
+    string? phoneNumber = ();
 
 };
 
-// User record type for MongoDB
 type UserDocument record {
     string email;
     string username;
@@ -136,39 +126,44 @@ type UserDocument record {
     string? lastLogin = ();
     string? authMethod = "local";
     string? googleId = ();
-    string? picture = (); // This will store the profile picture URL
+    string? picture = ();
     boolean? emailVerified = false;
     string? unsplashImageId = ();
 };
 
-// Profile picture update request
+type AdminLoginRequest record {
+    string username;
+    string password;
+};
+
+type AdminDocument record {
+    string username;
+    string Password;
+};
+
 type ProfilePictureUpdate record {
     string email;
     string? pictureUrl;
     string? unsplashImageId;
 };
 
-// User input type
 type UserInput record {
     string email;
     string username;
     string password;
 };
 
-// Login request type
 type LoginRequest record {
     string email;
     string password;
 };
 
-// Enhanced response type with optional data field
 type ApiResponse record {
     boolean success;
     string message;
     json? data = ();
 };
 
-// Presentation record types
 type PresentationDocument record {
     string userEmail;
     string topic;
@@ -181,7 +176,6 @@ type PresentationDocument record {
 
 final email:SmtpClient smtpClient = check new (smtpHost, emailUsername, emailPassword, smtpConfig);
 
-// Email template function
 function createWelcomeEmailHtml(string username, string userEmail, string profilePictureUrl) returns string {
     return string `
     <!DOCTYPE html>
@@ -228,12 +222,12 @@ function createWelcomeEmailHtml(string username, string userEmail, string profil
             color: #555;
         }
         a {
-            color: #6A5ACD;
+            color:#00aeff;
             text-decoration: none;
         }
         /* Header */
         .header {
-            background: linear-gradient(135deg, #6A5ACD, #8A2BE2);
+            background: linear-gradient(135deg, #00aeff, #81d4fa);
             color: #ffffff;
             padding: 40px 30px;
             text-align: center;
@@ -256,7 +250,7 @@ function createWelcomeEmailHtml(string username, string userEmail, string profil
         /* Features Section */
         .features {
             background-color: #f8f9fa;
-            border-left: 4px solid #6A5ACD;
+            border-left: 4px solid  #00aeff;
             padding: 20px;
             margin: 30px 0;
         }
@@ -267,7 +261,7 @@ function createWelcomeEmailHtml(string username, string userEmail, string profil
         .features ul {
             margin: 0;
             padding-left: 20px;
-            list-style-type: '✅  ';
+            list-style-type: '⁘  ';
         }
         .features li {
             padding-left: 10px;
@@ -280,7 +274,7 @@ function createWelcomeEmailHtml(string username, string userEmail, string profil
             margin: 30px 0;
         }
         .button {
-            background: linear-gradient(135deg, #6A5ACD, #8A2BE2);
+            background: linear-gradient(135deg,  #00aeff, #81d4fa);
             color: #ffffff;
             padding: 15px 35px;
             border-radius: 50px;
@@ -341,7 +335,7 @@ function createWelcomeEmailHtml(string username, string userEmail, string profil
                     <table class="button-wrapper" width="100%">
                         <tr>
                             <td>
-                                <a href="http://localhost:3000/login" target="_blank" class="button">Start Creating Now</a>
+                                <a href="https://presentation-generator-pi.vercel.app/login" target="_blank" class="button">Start Creating Now</a>
                             </td>
                         </tr>
                     </table>
@@ -365,7 +359,6 @@ function createWelcomeEmailHtml(string username, string userEmail, string profil
     `;
 }
 
-// Send welcome email function
 function sendWelcomeEmail(string toEmail, string username, string profilePictureUrl) returns error? {
     log:printInfo("📧 Sending welcome email to: " + toEmail);
 
@@ -387,11 +380,9 @@ function sendWelcomeEmail(string toEmail, string username, string profilePicture
     }
 }
 
-// Email template for notifications
 function sendNotificationEmail(string toEmail, string username, string title, string message, string messageType) returns error? {
     log:printInfo("📧 Sending notification email to: " + toEmail);
 
-    // Get emoji based on message type
     string typeEmoji = getMessageTypeEmoji(messageType);
 
     string emailHtml = string `
@@ -426,7 +417,7 @@ function sendNotificationEmail(string toEmail, string username, string title, st
             <p>This is an important notification from ${fromName}. Please log in to your account for more details.</p>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:3000/login" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                <a href="https://presentation-generator-pi.vercel.app/login" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
                     Login to Your Account →
                 </a>
             </div>
@@ -443,12 +434,12 @@ function sendNotificationEmail(string toEmail, string username, string title, st
     `;
 
     email:Message emailMessage = {
-            to: [toEmail],
-            subject: typeEmoji + " " + title + " - " + fromName,
-            body: emailHtml,
-            'from: fromEmail,
-            contentType: mime:TEXT_HTML
-        };
+        to: [toEmail],
+        subject: typeEmoji + " " + title + " - " + fromName,
+        body: emailHtml,
+        'from: fromEmail,
+        contentType: mime:TEXT_HTML
+    };
 
     email:Error? result = smtpClient->sendMessage(emailMessage);
 
@@ -460,7 +451,6 @@ function sendNotificationEmail(string toEmail, string username, string title, st
     }
 }
 
-// Helper function to get emoji for message type
 function getMessageTypeEmoji(string messageType) returns string {
     match messageType {
         "success" => {
@@ -482,12 +472,11 @@ function getMessageTypeEmoji(string messageType) returns string {
 }
 
 final http:Client loremPicsumClient = check new ("https://picsum.photos");
-// MongoDB configuration
+
 configurable string host = "localhost";
 configurable int port = 27017;
 configurable string database = "userDb";
 
-// MongoDB client
 final mongodb:Client mongoClient = check new ({
     connection: {
         serverAddress: {
@@ -497,7 +486,6 @@ final mongodb:Client mongoClient = check new ({
     }
 });
 
-// Extract token from Authorization header
 function extractTokenFromHeader(string|http:HeaderNotFoundError authHeaderResult) returns string|error {
     if authHeaderResult is http:HeaderNotFoundError {
         return error("Authorization header is missing");
@@ -508,13 +496,12 @@ function extractTokenFromHeader(string|http:HeaderNotFoundError authHeaderResult
         return error("Invalid authorization header format");
     }
 
-    return authHeader.substring(7); // Remove "Bearer " prefix
+    return authHeader.substring(7);
 }
 
-// CORS configuration
 @http:ServiceConfig {
     cors: {
-        allowOrigins: ["http://localhost:3000"],
+        allowOrigins: ["https://presentation-generator-pi.vercel.app"],
         allowCredentials: false,
         allowHeaders: ["Content-Type"],
         allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -523,7 +510,6 @@ function extractTokenFromHeader(string|http:HeaderNotFoundError authHeaderResult
 
 service / on new http:Listener(9090) {
 
-    // Test endpoint for connection verification
     resource function get test() returns json {
         log:printInfo("Test endpoint called");
         return {
@@ -533,15 +519,39 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Regular signup endpoint - Modified to assign random profile picture
-    // Regular signup endpoint - Modified to assign random profile picture
-    // Regular signup endpoint - Modified to assign consistent profile picture
+    resource function post admin/login(@http:Payload AdminLoginRequest loginRequest) returns ApiResponse|error {
+        log:printInfo("=== ADMIN LOGIN REQUEST ===");
+
+        mongodb:Database userDb = check mongoClient->getDatabase(database);
+        mongodb:Collection adminCollection = check userDb->getCollection("admin");
+
+        // Find the admin user by username
+        map<json> filter = {"username": loginRequest.username};
+        AdminDocument? adminUser = check adminCollection->findOne(filter);
+
+        if adminUser is AdminDocument {
+            // Check if the password matches
+            if adminUser.Password == loginRequest.password {
+                log:printInfo("✅ Admin login successful for: " + loginRequest.username);
+                return {
+                    success: true,
+                    message: "Admin login successful"
+                };
+            }
+        }
+
+        log:printWarn("Admin login failed for: " + loginRequest.username);
+        return {
+            success: false,
+            message: "Invalid username or password"
+        };
+    }
+
     resource function post signup(@http:Payload UserInput user) returns ApiResponse|error {
         log:printInfo("=== REGULAR SIGNUP REQUEST ===");
         log:printInfo("Email: " + user.email);
         log:printInfo("Username: " + user.username);
 
-        // Your existing validation code...
         if user.email.length() == 0 || user.username.length() == 0 || user.password.length() == 0 {
             return {success: false, message: "All fields are required"};
         }
@@ -550,12 +560,10 @@ service / on new http:Listener(9090) {
             return {success: false, message: "Password must be at least 6 characters long"};
         }
 
-        // Your existing database operations...
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
         mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
-        // Check existing email/username...
         int emailCount = check usersCollection->countDocuments({"email": user.email});
         if emailCount > 0 {
             return {success: false, message: "Email already exists"};
@@ -566,18 +574,15 @@ service / on new http:Listener(9090) {
             return {success: false, message: "Username already exists"};
         }
 
-        // Hash password and create user...
         byte[] hashedPassword = crypto:hashSha256(user.password.toBytes());
         string hashedPasswordStr = hashedPassword.toBase64();
         string currentTime = time:utcToString(time:utcNow());
 
-        // Generate consistent profile picture
         byte[] emailHash = crypto:hashSha256(user.email.toBytes());
         string emailHashStr = emailHash.toBase64();
         string pictureId = emailHashStr.substring(0, 8);
         string profilePictureUrl = "https://picsum.photos/300/300?random=" + pictureId;
 
-        // Create user documents...
         map<json> newUserDoc = {
             "email": user.email,
             "username": user.username,
@@ -595,7 +600,6 @@ service / on new http:Listener(9090) {
             "pictureId": pictureId
         };
 
-        // Insert into database...
         mongodb:Error? insertResult = usersCollection->insertOne(newUserDoc);
         if insertResult is mongodb:Error {
             return {success: false, message: "Failed to create user"};
@@ -603,7 +607,7 @@ service / on new http:Listener(9090) {
 
         mongodb:Error? userDataInsertResult = userDataCollection->insertOne(newUserDataDoc);
         if userDataInsertResult is mongodb:Error {
-            // Rollback user creation
+
             mongodb:DeleteResult|mongodb:Error deleteResult = usersCollection->deleteOne({"email": user.email});
             if deleteResult is mongodb:Error {
                 log:printWarn("Failed to rollback user creation: " + deleteResult.message());
@@ -611,7 +615,6 @@ service / on new http:Listener(9090) {
             return {success: false, message: "Failed to create user data"};
         }
 
-        // 🎯 SEND WELCOME EMAIL
         error? emailResult = sendWelcomeEmail(user.email, user.username, profilePictureUrl);
         if emailResult is error {
             log:printWarn("Failed to send welcome email, but user created successfully");
@@ -631,7 +634,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Check if username exists (useful for real-time validation)
     resource function get checkUsername/[string username]() returns ApiResponse|error {
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
@@ -647,12 +649,10 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Remove all JWT-related functions and just keep the simple login endpoint
     resource function post login(@http:Payload LoginRequest credentials) returns ApiResponse|error {
         log:printInfo("=== LOGIN REQUEST ===");
         log:printInfo("Email: " + credentials.email);
 
-        // Validate input
         if credentials.email.length() == 0 || credentials.password.length() == 0 {
             log:printWarn("Login validation failed: Empty fields");
             return {
@@ -665,7 +665,6 @@ service / on new http:Listener(9090) {
         mongodb:Collection usersCollection = check userDb->getCollection("users");
         mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
-        // Find user by email
         map<json> filter = {"email": credentials.email};
         mongodb:FindOptions findOptions = {};
         stream<UserDocument, mongodb:Error?> userStream = check usersCollection->find(filter, findOptions);
@@ -683,14 +682,12 @@ service / on new http:Listener(9090) {
 
         UserDocument user = users[0];
 
-        // Verify password
         byte[] hashedPassword = crypto:hashSha256(credentials.password.toBytes());
         string hashedPasswordStr = hashedPassword.toBase64();
 
         if user.password == hashedPasswordStr {
             log:printInfo("✅ Login successful for user: " + credentials.email);
 
-            // Update last login time
             string currentTime = time:utcToString(time:utcNow());
             mongodb:Update updateDoc = {
                 set: {
@@ -703,7 +700,6 @@ service / on new http:Listener(9090) {
                 log:printWarn("Failed to update last login time: " + updateResult.message());
             }
 
-            // Get user profile data from userData collection
             stream<UserDataDocument, mongodb:Error?> userDataStream = check userDataCollection->find(filter, findOptions);
             UserDataDocument[] userDataList = check from UserDataDocument doc in userDataStream
                 select doc;
@@ -719,7 +715,6 @@ service / on new http:Listener(9090) {
                 };
             }
 
-            // Return success with user data (no JWT token needed)
             return {
                 success: true,
                 message: "Login successful",
@@ -739,7 +734,6 @@ service / on new http:Listener(9090) {
         }
     }
 
-    // Use the same pattern as your working user endpoints
     resource function post admin/messages(@http:Payload CreateMessageRequest messageData) returns ApiResponse|error {
         log:printInfo("=== CREATE ADMIN MESSAGE REQUEST ===");
         log:printInfo("Title: " + messageData.title);
@@ -782,7 +776,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Store presentation
     resource function post storePresentation(@http:Payload json requestData) returns ApiResponse|error {
         log:printInfo("=== STORE PRESENTATION ===");
 
@@ -834,7 +827,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get user presentations
     resource function get getUserPresentations/[string userEmail]() returns ApiResponse|error {
         log:printInfo("=== GET USER PRESENTATIONS ===");
         log:printInfo("User: " + userEmail);
@@ -877,7 +869,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Delete presentation
     resource function delete deletePresentation/[string presentationId](@http:Payload json requestData) returns ApiResponse|error {
         log:printInfo("=== DELETE PRESENTATION ===");
         log:printInfo("Presentation ID: " + presentationId);
@@ -918,7 +909,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Rename presentation
     resource function put renamePresentation/[string presentationId](@http:Payload json requestData) returns ApiResponse|error {
         log:printInfo("=== RENAME PRESENTATION ===");
         log:printInfo("Presentation ID: " + presentationId);
@@ -962,7 +952,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get single presentation
     resource function get getPresentation/[string presentationId]/[string userEmail]() returns ApiResponse|error {
         log:printInfo("=== GET SINGLE PRESENTATION ===");
         log:printInfo("Presentation ID: " + presentationId);
@@ -1037,12 +1026,10 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Replace your old notification endpoint with this simple one
     resource function get notifications/[string userEmail]() returns ApiResponse|error {
         log:printInfo("=== OLD NOTIFICATION ENDPOINT - REDIRECTING ===");
         log:printInfo("User: " + userEmail);
 
-        // Return the same test data as the messages endpoint
         json[] testMessages = [
             {
                 "id": "test-1",
@@ -1066,13 +1053,12 @@ service / on new http:Listener(9090) {
             success: true,
             message: "Notifications retrieved successfully",
             data: {
-                notifications: testMessages,  // Keep old structure for compatibility
+                notifications: testMessages,
                 count: testMessages.length()
             }
         };
     }
 
-    // Delete user endpoint (for testing)
     resource function delete user/[string email]() returns ApiResponse|error {
         log:printInfo("Delete user request for: " + email);
 
@@ -1105,7 +1091,6 @@ service / on new http:Listener(9090) {
         }
     }
 
-    // Check if user exists (useful for real-time validation)
     resource function get checkEmail/[string email]() returns ApiResponse|error {
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
@@ -1121,9 +1106,8 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get random profile picture from Lorem Picsum sendemail
     resource function get randomProfilePicture() returns json|error {
-        string imageUrl = "https://picsum.photos/200/300"; // Change dimensions as needed
+        string imageUrl = "https://picsum.photos/200/300";
         return {
             success: true,
             message: "Random profile picture retrieved",
@@ -1133,15 +1117,13 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Update user profile picture
     resource function put updateProfilePicture(@http:Payload ProfilePictureUpdate updateData) returns ApiResponse|error {
         log:printInfo("Profile picture update request for: " + updateData.email);
 
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection usersCollection = check userDb->getCollection("users");
-        mongodb:Collection userDataCollection = check userDb->getCollection("userData"); // New collection
+        mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
-        // Check if user exists
         int userCount = check usersCollection->countDocuments({"email": updateData.email});
         if userCount == 0 {
             return {
@@ -1150,7 +1132,6 @@ service / on new http:Listener(9090) {
             };
         }
 
-        // Prepare update document for users collection
         map<json> updateFields = {
             "picture": updateData.pictureUrl
         };
@@ -1159,7 +1140,6 @@ service / on new http:Listener(9090) {
             set: updateFields
         };
 
-        // Update user document in users collection
         mongodb:UpdateResult|mongodb:Error updateResult = usersCollection->updateOne({"email": updateData.email}, updateDoc);
 
         if updateResult is mongodb:Error {
@@ -1170,7 +1150,6 @@ service / on new http:Listener(9090) {
             };
         }
 
-        // Update userData document in userData collection
         mongodb:UpdateResult|mongodb:Error userDataUpdateResult = userDataCollection->updateOne(
         {"email": updateData.email},
         {set: {"picture": updateData.pictureUrl}}
@@ -1192,13 +1171,11 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get multiple random profile pictures for user to choose from
     resource function get profilePictureOptions/[int count]() returns json|error {
         json[] images = [];
 
-        // Generate multiple random images from Lorem Picsum
         foreach int i in 0 ..< count {
-            // Create image object with Lorem Picsum URLs
+
             json imageData = {
                 "id": i.toString(),
                 "urls": {
@@ -1221,7 +1198,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get user profile data from userData collection
     resource function get userProfile/[string email]() returns ApiResponse|error {
         log:printInfo("=== GET USER PROFILE REQUEST ===");
         log:printInfo("Email: " + email);
@@ -1229,7 +1205,6 @@ service / on new http:Listener(9090) {
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
-        // Find user profile by email
         map<json> filter = {"email": email};
         mongodb:FindOptions findOptions = {};
         stream<UserDataDocument, mongodb:Error?> userDataStream = check userDataCollection->find(filter, findOptions);
@@ -1261,11 +1236,9 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Update user profile data (bio, location, etc.)
     resource function put updateUserProfile(@http:Payload json profileData) returns ApiResponse|error {
         log:printInfo("=== UPDATE USER PROFILE REQUEST ===");
 
-        // Extract email from profile data
         json|error emailValue = profileData.email;
         if !(emailValue is string) {
             return {
@@ -1280,7 +1253,6 @@ service / on new http:Listener(9090) {
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection userDataCollection = check userDb->getCollection("userData");
 
-        // Check if user exists in userData collection
         int userCount = check userDataCollection->countDocuments({"email": email});
         if userCount == 0 {
             return {
@@ -1289,14 +1261,12 @@ service / on new http:Listener(9090) {
             };
         }
 
-        // Prepare update document
         map<json> updateFields = {};
 
         mongodb:Update updateDoc = {
             set: updateFields
         };
 
-        // Update userData document
         mongodb:UpdateResult|mongodb:Error updateResult = userDataCollection->updateOne(
         {"email": email},
         updateDoc
@@ -1318,7 +1288,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get all userData (for testing - remove in production)
     resource function get allUserData() returns ApiResponse|error {
         log:printInfo("Fetching all user data");
 
@@ -1348,7 +1317,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Delete user profile from userData collection
     resource function delete userProfile/[string email]() returns ApiResponse|error {
         log:printInfo("Delete user profile request for: " + email);
 
@@ -1381,7 +1349,6 @@ service / on new http:Listener(9090) {
         }
     }
 
-    // Check if user profile exists in userData collection
     resource function get checkUserProfile/[string email]() returns ApiResponse|error {
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection userDataCollection = check userDb->getCollection("userData");
@@ -1398,84 +1365,18 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // // Update the mark as read endpoint
-    // resource function post notifications/markRead(@http:Payload MarkNotificationReadRequest readData) returns ApiResponse|error {
-    //     log:printInfo("=== MARK NOTIFICATION READ ===");
-    //     log:printInfo("User: " + readData.userEmail);
-    //     log:printInfo("Notification ID: " + readData.notificationId);
-
-    //     mongodb:Database userDb = check mongoClient->getDatabase(database);
-    //     mongodb:Collection userNotificationsCollection = check userDb->getCollection("userNotifications");
-
-    //     string currentTime = time:utcToString(time:utcNow());
-
-    //     // Check if record already exists
-    //     map<json> filter = {"userId": readData.userEmail, "notificationId": readData.notificationId};
-
-    //     // Count documents to check if exists
-    //     int|mongodb:Error existingCount = userNotificationsCollection->countDocuments(filter);
-
-    //     if existingCount is mongodb:Error {
-    //         log:printError("Error checking existing notification", 'error = existingCount);
-    //         return {success: false, message: "Failed to check notification status"};
-    //     }
-
-    //     if existingCount > 0 {
-    //         // Update existing record
-    //         mongodb:Update updateDoc = {
-    //             set: {
-    //                 "isRead": true,
-    //                 "readAt": currentTime
-    //             }
-    //         };
-
-    //         mongodb:UpdateResult|mongodb:Error updateResult = userNotificationsCollection->updateOne(filter, updateDoc);
-
-    //         if updateResult is mongodb:Error {
-    //             log:printError("Error updating notification", 'error = updateResult);
-    //             return {success: false, message: "Failed to update notification status"};
-    //         }
-    //     } else {
-    //         // Create new record
-    //         map<json> newUserNotificationDoc = {
-    //             "userId": readData.userEmail,
-    //             "notificationId": readData.notificationId,
-    //             "readAt": currentTime,
-    //             "isRead": true
-    //         };
-
-    //         mongodb:Error? insertResult = userNotificationsCollection->insertOne(newUserNotificationDoc);
-
-    //         if insertResult is mongodb:Error {
-    //             log:printError("Error inserting notification read record", 'error = insertResult);
-    //             return {success: false, message: "Failed to mark notification as read"};
-    //         }
-    //     }
-
-    //     log:printInfo("✅ Notification marked as read successfully");
-
-    //     return {
-    //         success: true,
-    //         message: "Notification marked as read"
-    //     };
-    // }
-
-    // Update the admin notifications endpoint to return proper data
     resource function get admin/notifications() returns ApiResponse|error {
         log:printInfo("=== GET ALL NOTIFICATIONS (ADMIN) ===");
 
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection notificationsCollection = check userDb->getCollection("notifications");
 
-        // Create empty filter
         map<json> filter = {};
 
-        // FIXED: Use proper mongodb:FindOptions format with 'sort' as a map<int>
         mongodb:FindOptions findOptions = {
-            sort: {createdAt: -1} // Use integer for sort direction
+            sort: {createdAt: -1}
         };
 
-        // Define a specific record type for notification documents
         stream<record {|
             string title;
             string message;
@@ -1516,14 +1417,12 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Test endpoint to check notifications in database  get users
     resource function get test/notifications() returns ApiResponse|error {
         log:printInfo("=== TEST NOTIFICATIONS IN DATABASE ===");
 
         mongodb:Database userDb = check mongoClient->getDatabase(database);
         mongodb:Collection notificationsCollection = check userDb->getCollection("notifications");
 
-        // Count total notifications
         int|mongodb:Error totalCount = notificationsCollection->countDocuments({});
 
         if totalCount is mongodb:Error {
@@ -1533,7 +1432,6 @@ service / on new http:Listener(9090) {
             };
         }
 
-        // Get all notifications (raw)
         stream<map<json>, error?> notificationStream = check notificationsCollection->find({}, {});
 
         json[] allNotifications = [];
@@ -1559,7 +1457,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Send email notification to all users  admin/notifications
     resource function post admin/sendEmailNotification(@http:Payload AdminEmailRequest emailData) returns ApiResponse|error {
         log:printInfo("=== SEND EMAIL NOTIFICATION TO ALL USERS ===");
         log:printInfo("Title: " + emailData.title);
@@ -1569,7 +1466,6 @@ service / on new http:Listener(9090) {
         mongodb:Collection usersCollection = check userDb->getCollection("users");
         mongodb:Collection notificationCounterCollection = check userDb->getCollection("notificationCounter");
 
-        // Get all users
         map<json> filter = {};
         mongodb:FindOptions findOptions = {};
 
@@ -1582,7 +1478,7 @@ service / on new http:Listener(9090) {
         int errorCount = 0;
 
         foreach UserDocument user in allUsers {
-            // Send email
+
             error? emailResult = sendNotificationEmail(user.email, user.username, emailData.title, emailData.message, emailData.messageType);
 
             if emailResult is error {
@@ -1592,14 +1488,12 @@ service / on new http:Listener(9090) {
                 log:printInfo("✅ Email sent successfully to: " + user.email);
                 successCount += 1;
 
-                // Update notification counter for this user
                 map<json> counterFilter = {"userEmail": user.email};
 
-                // Check if counter exists
                 int|mongodb:Error existingCount = notificationCounterCollection->countDocuments(counterFilter);
 
                 if existingCount is int && existingCount > 0 {
-                    // Update existing counter
+
                     mongodb:Update updateDoc = {
                         inc: {"emailCount": 1},
                         set: {"lastEmailSent": currentTime}
@@ -1610,7 +1504,7 @@ service / on new http:Listener(9090) {
                         log:printWarn("Failed to update counter for: " + user.email);
                     }
                 } else {
-                    // Create new counter
+
                     map<json> newCounter = {
                         "userEmail": user.email,
                         "emailCount": 1,
@@ -1638,7 +1532,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Get notification count for a user
     resource function get notifications/count/[string userEmail]() returns ApiResponse|error {
         log:printInfo("=== GET NOTIFICATION COUNT ===");
         log:printInfo("User: " + userEmail);
@@ -1670,7 +1563,6 @@ service / on new http:Listener(9090) {
         };
     }
 
-    // Reset notification count for a user
     resource function post notifications/reset(@http:Payload ResetNotificationRequest resetData) returns ApiResponse|error {
         log:printInfo("=== RESET NOTIFICATION COUNT ===");
         log:printInfo("User: " + resetData.userEmail);
