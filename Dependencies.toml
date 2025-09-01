@@ -46,6 +46,9 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "time"}
 ]
+modules = [
+	{org = "ballerina", packageName = "crypto", moduleName = "crypto"}
+]
 
 [[package]]
 org = "ballerina"
@@ -348,6 +351,7 @@ org = "signup_app"
 name = "signup_backend"
 version = "0.1.0"
 dependencies = [
+	{org = "ballerina", name = "crypto"},
 	{org = "ballerina", name = "email"},
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "log"},
